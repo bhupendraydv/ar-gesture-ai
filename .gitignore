@@ -1,0 +1,126 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ML Models (too large for git)
+*.pkl
+*.h5
+*.pt
+*.pth
+*.model
+backend/models/*.pkl
+backend/models/*.h5
+
+# Data files (training data)
+data/gestures/**/*.npy
+data/faces/**/*.npy
+data/**/*.csv
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+
+# IDE settings
+.vscode/
+.idea/
+*.code-workspace
+
+# Package files
+*.whl
+*.tar.gz
+*.zip
+
+# Node modules (if any frontend build tools are used)
+node_modules/
+
+# Local development
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Generated files
+*.pyo
+*.pyd
+*.so
+*.o
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
