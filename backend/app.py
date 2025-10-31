@@ -6,11 +6,20 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 from typing import Optional, List
 import os
+import logging
 from dotenv import load_dotenv
 
-from storage import MongoDBStorage
+try:
+    from storage import MongoDBStorage
+except ImportError as e:
+    print(f"Error importing storage module: {e}")
+    raise
 
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Gesture AI Communication API",
@@ -28,77 +37,141 @@ app.add_middleware(
 )
 
 # Database
-db = MongoDBStorage(
-    uri=os.getenv("MONGO_URI", "mongodb://localhost:27017"),
-    db_name=os.getenv("DB_NAME", "gesture_ai")
-)
+try:
+    db = MongoDBStorage(
+        uri=os.getenv("MONGO_URI", "mongodb://localhost:27017"),
+        db_name=os.getenv("DB_NAME", "gesture_ai")
+    )
+    logger.info("MongoDB connection initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize MongoDB: {e}")
+    # Continue without database
+    db = None
 
 # Data Models
 class Event(BaseModel):
+    """Event model for gesture/expression logging"""
     gesture: str
     expression: str
     confidence: float
     timestamp: Optional[str] = None
 
 class EventResponse(BaseModel):
-    id: Optional[str] = None
+    """Response model for events"""
+    id: str
     gesture: str
     expression: str
     confidence: float
     timestamp: str
 
-# Routes
-@app.get("/health")
+class HealthResponse(BaseModel):
+    """Health check response"""
+    status: str
+    service: str
+    timestamp: str
+
+@app.get("/health", response_model=HealthResponse)
 def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "Gesture AI Communication Backend",
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    try:
+        return {
+            "status": "healthy",
+            "service": "Gesture AI Communication Backend",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 @app.post("/log_event", response_model=EventResponse)
 def log_event(event: Event):
     """Log a gesture/expression event"""
-    if not event.timestamp:
-        event.timestamp = datetime.now(timezone.utc).isoformat()
-    
-    # Store in database
-    result = db.insert_event({
-        "gesture": event.gesture,
-        "expression": event.expression,
-        "confidence": event.confidence,
-        "timestamp": event.timestamp
-    })
-    
-    return EventResponse(
-        id=str(result),
-        gesture=event.gesture,
-        expression=event.expression,
-        confidence=event.confidence,
-        timestamp=event.timestamp
-    )
+    try:
+        if not event.timestamp:
+            event.timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Validate input
+        if not event.gesture or len(event.gesture.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Gesture cannot be empty")
+        if not event.expression or len(event.expression.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Expression cannot be empty")
+        if event.confidence < 0 or event.confidence > 1:
+            raise HTTPException(status_code=400, detail="Confidence must be between 0 and 1")
+        
+        if db is None:
+            logger.warning("MongoDB not available, returning mock response")
+            return EventResponse(
+                id="mock_id",
+                gesture=event.gesture,
+                expression=event.expression,
+                confidence=event.confidence,
+                timestamp=event.timestamp
+            )
+        
+        # Store in database
+        result = db.insert_event({
+            "gesture": event.gesture,
+            "expression": event.expression,
+            "confidence": event.confidence,
+            "timestamp": event.timestamp
+        })
+        
+        return EventResponse(
+            id=str(result),
+            gesture=event.gesture,
+            expression=event.expression,
+            confidence=event.confidence,
+            timestamp=event.timestamp
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error logging event: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to log event: {str(e)}")
 
 @app.get("/events", response_model=List[EventResponse])
 def get_events(limit: int = 100, offset: int = 0):
     """Get logged events"""
-    events = db.get_events(limit=limit, offset=offset)
-    return [
-        EventResponse(
-            id=str(e.get("_id")),
-            gesture=e.get("gesture"),
-            expression=e.get("expression"),
-            confidence=e.get("confidence"),
-            timestamp=e.get("timestamp")
-        )
-        for e in events
-    ]
+    try:
+        if limit < 1 or limit > 1000:
+            raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="Offset must be non-negative")
+        
+        if db is None:
+            logger.warning("MongoDB not available, returning empty list")
+            return []
+        
+        events = db.get_events(limit=limit, offset=offset)
+        return [
+            EventResponse(
+                id=str(e.get("_id")),
+                gesture=e.get("gesture", ""),
+                expression=e.get("expression", ""),
+                confidence=e.get("confidence", 0),
+                timestamp=e.get("timestamp", "")
+            )
+            for e in events
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving events: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve events: {str(e)}")
 
 @app.delete("/events")
 def clear_events():
     """Clear all events"""
-    db.clear_events()
-    return {"status": "success", "message": "All events cleared"}
+    try:
+        if db is None:
+            logger.warning("MongoDB not available, cannot clear events")
+            return {"status": "warning", "message": "MongoDB not available"}
+        
+        db.clear_events()
+        return {"status": "success", "message": "All events cleared"}
+    except Exception as e:
+        logger.error(f"Error clearing events: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear events: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
