@@ -1,5 +1,4 @@
 """FastAPI Backend for Assistive Gesture & Facial AI Communication System"""
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,6 +13,16 @@ try:
 except ImportError as e:
     print(f"Error importing storage module: {e}")
     raise
+
+# Countries routes
+try:
+    from .countries_routes import router as countries_router  # type: ignore
+except Exception:
+    # When running as module-less (e.g., uvicorn backend.app:app), fallback to direct import
+    try:
+        from countries_routes import router as countries_router  # type: ignore
+    except Exception:
+        countries_router = None  # Will handle later
 
 load_dotenv()
 
@@ -35,6 +44,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount countries router if available
+if countries_router is not None:
+    app.include_router(countries_router)
+else:
+    logger.warning("Countries router not available; /countries endpoints will be unavailable")
 
 # Database
 try:
